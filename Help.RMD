@@ -1,0 +1,46 @@
+# Instructions
+
+## Column 1
+
+### Overview
+
+
+
+This app allows you to upload previous experimental outcome data and provides a dashboard summarizing these data.
+It then calculates assignment probabilities and a treatment assignment for the next wave of the experiment, following the *exploration sampling* algorithm described in [adaptiveexperimentspolicy_short.pdf](https://maxkasy.github.io/home/files/papers/adaptiveexperimentspolicy_short.pdf).
+This treatment assignment can be downloaded in *.csv* format.
+
+To try out the app, you might use the example data [combined_outcomes_PAD.csv](https://maxkasy.github.io/home/files/other/combined_outcomes_PAD.csv) from our experiment with *Precision Agriculture for Development*.
+
+
+### Upload csv data
+
+*Previous data* must be in .csv format, and must include columns labeled
+
+- *outcome*:  A binary outcome variable, taking on the values 0 and 1.
+- *treatment*: A categorical variable, which can take on any strings or numbers as values.
+
+Any other variables will be ignored by the app.
+
+
+## Col 2
+
+### Controls
+
+- *Browse*: Upload the file containing previous outcome data.
+- *Observations*: Number of observations in the next wave, for which a treatment assignment will be generated.
+- *Download*: Download a file with this treatment assignment.
+
+
+After uploading your previous outcome data, it might take a few seconds for figures and tables to appear, as the new treatment assignment is calculated.
+
+
+### Output
+
+In the *Figures* tab, summary statistics for previous treatment assignments and success rates are plotted.
+This tab also shows, in the bottom right, the distribution across treatment arms for the next wave as proposed by the *exploration sampling* algorithm.
+
+In the *Tables* tab, the left table shows the number of observations, successes, and success rates in the previous data.
+The right tab shows posterior parameters for each treatment arm, assuming a uniform prior for average potential outcomes $\theta^d$.
+This table shows posterior means and variances for the average potential outcomes, as well as the posterior probabilities $p^d$ that each treatment is optimal.
+These probabilities form the basis of the exploration sampling algorithm.

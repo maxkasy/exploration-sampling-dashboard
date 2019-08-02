@@ -1,0 +1,251 @@
+---
+title: "Exploration sampling dashboard"
+resource_files:
+- www/combined_outcomes.csv
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    theme: yeti
+    vertical_layout: fill
+source_code: embed
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(lubridate)
+source("modified_thompson.R")
+```
+
+
+Column {.sidebar}
+===============================
+
+
+### Upload
+
+Previous outcome data
+```{r}
+fileInput("data", label = "",
+                              multiple = FALSE,
+                              accept = c("text/csv",
+                                         "text/comma-separated-values,text/plain",
+                                         ".csv"))
+  
+priordata= reactive({
+    req(input$data)
+    read_csv(input$data$datapath) %>% 
+      mutate(treatment=factor(treatment))
+})
+
+by_treatment= reactive({
+    req(priordata)
+    priordata() %>% 
+      group_by(treatment, .drop=FALSE) %>% 
+      summarise(avg=mean(outcome), count=n(), successes=as.integer(sum(outcome)))
+})
+
+```
+
+
+
+```{r}
+  alpha = reactive({
+    DtchoiceThompsonProbabilities(
+          priordata()$outcome,
+          priordata()$treatment,
+          k=length(levels(priordata()$treatment)),
+    ) %>% as_vector
+  })
+    
+  P_current = reactive({
+      DtchoiceThompson_modified(alpha())
+  })
+  
+  #knitr::kable(P_current, digits=2)
+  P_current_tibble = reactive({
+    tibble(share = as_vector(P_current()),
+       treatment = factor(levels(priordata()$treatment)))
+  })
+```
+
+
+### Download
+Observations in the next wave
+```{r}
+numericInput('observations', '', 100,
+             min = 1)
+```
+
+
+Treatment assignment for the next wave
+
+```{r}
+downloadButton("downloadData", "")
+downloadHandler(
+    filename = paste(Sys.Date(), "_treatment_assignment.csv", sep = ""),
+    content = function(file) {
+      write_csv(treatment_assignment(), file)
+    }
+  )
+```
+
+
+<!-- Include help page as first tab -->
+```{r child = 'Help.Rmd'}
+```
+
+
+# Figures
+
+
+Column 1
+-----------------
+
+
+### Number of observations 
+
+
+```{r}
+renderValueBox({
+  valueBox(nrow(priordata()))
+})
+```
+
+### Success rate
+```{r}
+renderGauge({
+  gauge(round(mean(priordata()$outcome), digits=2), min=0, max=1)
+})
+```
+
+
+### Success rate by treatment
+
+```{r, fig.width=6, fig.height=3}
+renderPlot({
+  by_treatment() %>% 
+  ggplot(aes(x=reorder(treatment, desc(treatment)), 
+             y=avg, color = treatment)) +
+    geom_point(size=5) +
+    scale_color_viridis_d() +
+    coord_flip() +
+    ylim(0, NA) +
+    theme_minimal() +
+    theme(legend.position = "none") +
+    labs(x="Treatment", y="Average outcome")
+})
+```
+
+
+
+Column 2
+--------------------------------------------------
+
+
+
+### Past distribution across treatments
+
+```{r, fig.width=6, fig.height=3}
+renderPlot({
+  by_treatment() %>% 
+  ggplot(aes(x=reorder(treatment, desc(treatment)), 
+             y=count, fill=treatment)) +
+    geom_col() +
+    scale_fill_viridis_d() +
+    coord_flip() +
+    theme_minimal() +
+    theme(legend.position = "none") +
+    labs(x="Treatment", y="Number of observations")
+})
+
+```
+
+
+
+### Proposed assignment shares, next wave
+
+```{r, echo=F, fig.width=6, fig.height=3}
+
+renderPlot({
+  P_current_tibble() %>% 
+  ggplot(aes(x=reorder(treatment, desc(treatment)), 
+             y = share, fill = treatment)) +
+    geom_col() +
+    scale_fill_viridis_d() +
+    coord_flip() +
+    theme_minimal() +
+    theme(legend.position = "none") +
+    labs(x="Treatment", y="Share") 
+})
+
+treatment_assignment = reactive({
+  tibble(treatment=ProportionalAssignment(P_current(), input$observations))
+})
+
+
+```
+
+
+
+# Tables
+
+## Column 1
+
+### Tabulated data
+
+```{r}
+tabulation = reactive({
+  tabulation=by_treatment() %>% 
+    select(treatment, count, successes, avg)
+  
+  colnames(tabulation)=c("Treatment", "Obervations", "Successes", "Share of successes")
+  tabulation
+})
+
+renderTable({
+    tabulation()
+  },
+  digits = 3#c(NA,0,0,3)
+)
+
+
+
+
+
+
+```
+
+## Column 2
+
+### Posterior parameters
+
+```{r}
+posterior=reactive({
+  Bayes_table=by_treatment() %>%
+    mutate(alpha= 1 + successes,
+           beta= 1 + count-successes,
+           mean = alpha / (alpha+beta),
+           var = alpha * beta / ((alpha+beta)^2 * (alpha+beta +1)  ),
+           std = sqrt(var),
+           succ_proba = alpha()) %>%
+    select(treatment, mean, std, succ_proba)
+
+  colnames(Bayes_table)=c("Treatment", "Mean", "Standard dev", "Probability optimal")
+
+  Bayes_table
+})
+
+
+renderTable({
+    posterior()
+  }, 
+  digits = 3
+)
+
+
+```
+
